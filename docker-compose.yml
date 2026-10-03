@@ -1,7 +1,9 @@
 services:
   nodered:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "1880:1880"
     environment:
-      - TELEGRAM_TOKEN
+      TELEGRAM_TOKEN: ""
