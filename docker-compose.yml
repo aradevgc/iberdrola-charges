@@ -1,0 +1,7 @@
+services:
+  nodered:
+    build: .
+    ports:
+      - "1880:1880"
+    environment:
+      - TELEGRAM_TOKEN
