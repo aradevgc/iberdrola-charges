@@ -1,0 +1,8 @@
+{
+  "name": "iberdrola-ev-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "node-red-contrib-telegrambot": "^19.0.3"
+  }
+}

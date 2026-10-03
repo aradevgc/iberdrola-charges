@@ -1,0 +1,3 @@
+{
+  "bot_cfg": { "token": "${TELEGRAM_TOKEN}" }
+}

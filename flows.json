@@ -1,0 +1,234 @@
+[
+  {
+    "id": "tab_iberdrola",
+    "type": "tab",
+    "label": "Iberdrola EV Monitor",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "bot_cfg",
+    "type": "telegram bot",
+    "botname": "IberdrolaEVBot",
+    "usernames": "",
+    "chatids": "",
+    "baseapiurl": "",
+    "testenvironment": false,
+    "updatemode": "polling",
+    "addressfamily": "",
+    "pollinterval": "300",
+    "usesocks": false,
+    "sockshost": "",
+    "socksprotocol": "socks5",
+    "socksport": "6667",
+    "socksusername": "anonymous",
+    "sockspassword": "",
+    "bothost": "",
+    "botpath": "",
+    "localbotport": "8443",
+    "publicbotport": "8443",
+    "privatekey": "",
+    "certificate": "",
+    "useselfsignedcertificate": false,
+    "sslterminated": false,
+    "verboselogging": false
+  },
+  {
+    "id": "c_info",
+    "type": "comment",
+    "z": "tab_iberdrola",
+    "name": "Consulta cada 15 s y avisa por Telegram cuando un cargador queda libre",
+    "info": "",
+    "x": 330,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "inj",
+    "type": "inject",
+    "z": "tab_iberdrola",
+    "name": "Cada 15 s",
+    "props": [
+      {
+        "p": "mode",
+        "v": "monitor",
+        "vt": "str"
+      }
+    ],
+    "repeat": "15",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "5",
+    "topic": "",
+    "x": 130,
+    "y": 140,
+    "wires": [
+      [
+        "f_prep"
+      ]
+    ]
+  },
+  {
+    "id": "tg_in",
+    "type": "telegram receiver",
+    "z": "tab_iberdrola",
+    "name": "Mensajes Telegram",
+    "bot": "bot_cfg",
+    "saveDataDir": "",
+    "filterCommands": false,
+    "x": 150,
+    "y": 240,
+    "wires": [
+      [
+        "f_filtro"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "f_filtro",
+    "type": "function",
+    "z": "tab_iberdrola",
+    "name": "Filtrar /stats",
+    "func": "const CHAT_ID = \"6338575677\"; // <-- el mismo chat id\nconst chatId = String(msg.payload.chatId);\nif (chatId !== CHAT_ID) return null; // ignora a desconocidos\n\nconst text = String(msg.payload.content || \"\").trim().toLowerCase().replace(/@\\w+$/, \"\");\nif (text !== \"/stats\" && text !== \"stats\") return null;\n\nmsg.mode = \"stats\";\nmsg.chatId = chatId;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 240,
+    "wires": [
+      [
+        "f_prep"
+      ]
+    ]
+  },
+  {
+    "id": "f_prep",
+    "type": "function",
+    "z": "tab_iberdrola",
+    "name": "Preparar petición",
+    "func": "msg.url = \"https://www.iberdrola.es/o/webclipb/iberdrola/puntosrecargacontroller/getListarPuntosRecarga\";\nmsg.method = \"POST\";\nmsg.headers = {\n  \"Content-Type\": \"application/json\",\n  \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\n  \"Accept\": \"application/json, text/plain, */*\",\n  \"Accept-Language\": \"es-ES,es;q=0.9\",\n  \"Origin\": \"https://www.iberdrola.es\",\n  \"Referer\": \"https://www.iberdrola.es/clientes/puntos-recarga\"\n};\nmsg.payload = {\n  dto: {\n    chargePointTypesCodes: [\"P\", \"R\", \"I\", \"N\"],\n    socketStatus: [],\n    advantageous: false,\n    connectorsType: [],\n    loadSpeed: [],\n    latitudeMax: 39.59354704714217,\n    latitudeMin: 39.58362536023294,\n    longitudeMax: -0.33177372823335327,\n    longitudeMin: -0.34602162252046265\n  },\n  language: \"es\"\n};\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 180,
+    "wires": [
+      [
+        "http"
+      ]
+    ]
+  },
+  {
+    "id": "http",
+    "type": "http request",
+    "z": "tab_iberdrola",
+    "name": "API Iberdrola",
+    "method": "use",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 800,
+    "y": 180,
+    "wires": [
+      [
+        "f_proc"
+      ]
+    ]
+  },
+  {
+    "id": "f_proc",
+    "type": "function",
+    "z": "tab_iberdrola",
+    "name": "Procesar estados",
+    "func": "const CHAT_ID = \"6338575677\"; // <-- tu chat id de Telegram\nconst CHARGERS = {\n  95684:  { alias: \"BIBLIOTECA\", emoji: \"📚\" },\n  161375: { alias: \"AJUNTAMENT\", emoji: \"🏛️\" },\n  147587: { alias: \"CASA\",       emoji: \"🏠\" },\n  147607: { alias: \"CASA IAIA\",  emoji: \"👵\" }\n};\n\nconst MAX_FALLOS = 20; // ~5 min con consultas cada 15 s\nconst send = (chatId, text) => ({ payload: { chatId, type: \"message\", content: text } });\nconst label = (st) => st === \"AVAILABLE\" ? \"🟢 LIBRE\" : st === \"OCCUPIED\" ? \"🔴 OCUPADO\" : \"⚪ \" + st;\n\nconst data = msg.payload;\nconst ok = msg.statusCode === 200 && data && Array.isArray(data.entidad);\nlet fallos = flow.get(\"fallos\") || 0;\n\nif (!ok) {\n  node.status({ fill: \"red\", shape: \"ring\", text: \"error API \" + msg.statusCode });\n  if (msg.mode === \"stats\") {\n    return [send(msg.chatId, \"⚠️ No he podido consultar la web de Iberdrola ahora mismo.\")];\n  }\n  fallos++;\n  flow.set(\"fallos\", fallos);\n  if (fallos === MAX_FALLOS) {\n    return [send(CHAT_ID, \"⚠️ Llevo varios minutos sin poder consultar Iberdrola. Puede que hayan bloqueado la IP o la web esté caída.\")];\n  }\n  return null;\n}\n\n// Estado actual de nuestros cargadores\nconst actual = {};\nfor (const cp of data.entidad) {\n  const info = CHARGERS[cp.cpId];\n  if (!info) continue;\n  let st = cp.cpStatus?.statusCode || \"UNKNOWN\";\n  if (st === \"RESERVED\") st = \"OCCUPIED\";\n  actual[cp.cpId] = st;\n}\nnode.status({ fill: \"green\", shape: \"dot\", text: new Date().toLocaleTimeString(\"es-ES\") });\n\n// Comando /stats\nif (msg.mode === \"stats\") {\n  let t = \"📊 Estado de los cargadores\\n\\n\";\n  for (const [id, info] of Object.entries(CHARGERS)) {\n    t += `${info.emoji} ${info.alias}: ${label(actual[id] || \"DESCONOCIDO\")}\\n`;\n  }\n  return [send(msg.chatId, t)];\n}\n\n// Monitorización: avisar solo al pasar de no-libre a libre\nconst out = [];\nif (fallos >= MAX_FALLOS) out.push(send(CHAT_ID, \"✅ Conexión con Iberdrola recuperada.\"));\nflow.set(\"fallos\", 0);\n\nconst prev = flow.get(\"estados\") || {};\nfor (const [id, st] of Object.entries(actual)) {\n  const before = prev[id];\n  if (before !== undefined && before !== \"AVAILABLE\" && st === \"AVAILABLE\") {\n    const info = CHARGERS[id];\n    out.push(send(CHAT_ID, `🔋 ¡Cargador disponible!\\n\\n${info.emoji} ${info.alias}\\n\\n🟢 Estado: LIBRE`));\n  }\n}\nflow.set(\"estados\", { ...prev, ...actual });\nreturn out.length ? [out] : null;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1010,
+    "y": 180,
+    "wires": [
+      [
+        "tg_out"
+      ]
+    ]
+  },
+  {
+    "id": "tg_out",
+    "type": "telegram sender",
+    "z": "tab_iberdrola",
+    "name": "Enviar a Telegram",
+    "bot": "bot_cfg",
+    "haserroroutput": false,
+    "outputs": 1,
+    "x": 1230,
+    "y": 180,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "h_in",
+    "type": "http in",
+    "z": "tab_iberdrola",
+    "name": "/health",
+    "url": "/health",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 130,
+    "y": 340,
+    "wires": [
+      [
+        "h_f"
+      ]
+    ]
+  },
+  {
+    "id": "h_f",
+    "type": "function",
+    "z": "tab_iberdrola",
+    "name": "OK",
+    "func": "msg.payload = \"ok\";\nmsg.statusCode = 200;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 340,
+    "wires": [
+      [
+        "h_out"
+      ]
+    ]
+  },
+  {
+    "id": "h_out",
+    "type": "http response",
+    "z": "tab_iberdrola",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 520,
+    "y": 340,
+    "wires": []
+  }
+]
